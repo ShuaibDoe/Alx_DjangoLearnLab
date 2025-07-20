@@ -7,7 +7,16 @@ library = Library.objects.get(name=library_name)
 books = library.books.all()
 for book in books:
     print(book.title)
-  
+
+author_name = "John Doe"  # replace with actual author name
+try:
+    author = Author.objects.get(name=author_name)
+    books = Book.objects.filter(author=author)
+    for book in books:
+        print(book.title)
+except Author.DoesNotExist:
+    print(f"Author named '{author_name}' not found.")
+    
 # Query all books by a specific author (e.g., "George Orwell")
 orwell = Author.objects.get(name="George Orwell")
 books_by_orwell = Book.objects.filter(author=orwell)
