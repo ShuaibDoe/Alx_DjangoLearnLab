@@ -1,74 +1,88 @@
-from rest_framework import generics, permissions, filters
-from django_filters.rest_framework import DjangoFilterBackend
-from .models import Author, Book
-from .serializers import AuthorSerializer, BookSerializer
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .pagination import CustomPageNumberPagination
-from .permissions import IsAdminOrReadOnly
-from rest_framework.throttling import UserRateThrottle
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from django_filters import rest_framework
+from rest_framework import filters
+from .serializers import BookSerializer
+from .models import Book
 
 
-# -------------------------
-# Author list & create view
-# -------------------------
-class AuthorListCreateView(generics.ListCreateAPIView):
-    queryset = Author.objects.all()
-    serializer_class = AuthorSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['birth_year']
-    search_fields = ['name']
-    ordering_fields = ['birth_year', 'name']
-
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
-        return [permissions.AllowAny()]
+# Create your views here.
 
 
-# -------------------------
-# Book list & create view
-# -------------------------
+class BookListView(generics.ListAPIView):
+    """
+        Provides a read-only list of all books.
+        * Only authenticated users are allowed to access this view or they will be allowed to READ it only.
+        * Supports basic filtering based on title, publication year, and author.
+        *Installed django-filter with pip install django-filter
+        *added it in INSTALLED APPS and added the settings needed
+        *imported DjangoFilterBackend
+        *and added the fields i want to filter
+        **Filtering**:
+        - Enabled via DjangoFilterBackend.
+        - Fields: `title`, `publication_year`, `author`
+        - Example: `/api/books/?title=Python&publication_year=2021`
 
-class BookListCreateView(generics.ListCreateAPIView):
+        **Searching**:
+        - Enabled via SearchFilter.
+        - Fields: `title`, `author__name` (author's name)
+        - Example: `/api/books/?search=Python` searches in book titles and author names.
+
+        **Ordering**:
+        - Enabled via OrderingFilter.
+        - Fields: `title`, `publication_year`
+        - Example: `/api/books/?ordering=publication_year` for ascending order,
+          `/api/books/?ordering=-publication_year` for descending order.
+
+
+    """
     queryset = Book.objects.all()
     serializer_class = BookSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['author__name', 'publication_year']
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends = [rest_framework.DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    ordering_fields = ['title', 'publication_year']
+    filterset_fields = ['title', 'publication_year', 'author']
     search_fields = ['title', 'author__name']
-    ordering_fields = ['publication_year', 'title']
-
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated()]
-        return [permissions.AllowAny()]
 
 
-# -------------------------
-# Custom API view: Recent Books
-# -------------------------
-class RecentBooksRateThrottle(UserRateThrottle):
-    rate = '5/min'
-
-class RecentBooksListView(generics.ListAPIView):
-    serializer_class = BookSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['author__name', 'publication_year']
-    search_fields = ['title', 'author__name']
-    ordering_fields = ['publication_year', 'title']
-    pagination_class = CustomPageNumberPagination
-    throttle_classes = [RecentBooksRateThrottle]
-
-    def get_queryset(self):
-        years = self.request.query_params.get('years', 5)  # default: last 5 years
-        try:
-            years = int(years)
-        except ValueError:
-            years = 5
-        cutoff_year = datetime.now().year - years
-        return Book.objects.filter(publication_year__gte=cutoff_year)
-    
-class BookDetailView(generics.RetrieveUpdateDestroyAPIView):
+class BookDetailView(generics.RetrieveAPIView):
+    """
+        Provides a read-only list of a single book.
+        * Only authenticated users are allowed to access this view or they will be allowed to READ it only.
+    """
     queryset = Book.objects.all()
     serializer_class = BookSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['title', 'author__name']
+    ordering_fields = ['title', 'publication_year']
+
+
+class BookCreateView(generics.CreateAPIView):
+    """
+        Provides a create API point for the Book.
+        * Only authenticated users are allowed to access this view.
+    """
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class BookUpdateView(generics.UpdateAPIView):
+    """
+        Provides a Update API point for a single Book.
+        * Only authenticated users are allowed to access this view.
+    """
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class BookDeleteView(generics.DestroyAPIView):
+    """
+        Provides a Delete API point for the Book.
+        * Only authenticated users are allowed to access this view.
+    """
+    queryset = Book.objects.all()
+    serializer_class = BookSerializer
+    permission_classes = [IsAuthenticated]
