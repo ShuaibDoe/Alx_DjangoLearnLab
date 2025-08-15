@@ -1,0 +1,50 @@
+{% extends 'blog/base.html' %}
+{% block content %}
+<article>
+    <h1>{{ object.title }}</h1>
+    <p>by {{ object.author }} • {{ object.published_date|date:"M d, Y H:i" }}</p>
+    <div>{{ object.content|linebreaks }}</div>
+    <p>
+    Tags:
+    {% for t in object.tags.all %}
+        <a href="{% url 'posts_by_tag' t.name %}">{{ t.name }}</a>{% if not forloop.last %}, {% endif %}
+    {% empty %} none
+    {% endfor %}
+    </p>
+    {% if user == object.author %}
+    <p>
+        <a href="{% url 'post-edit' object.pk %}">Edit</a> |
+        <a href="{% url 'post-delete' object.pk %}">Delete</a>
+    </p>
+    {% endif %}
+</article>
+
+<hr>
+<h3>Comments</h3>
+{% for c in object.comments.all %}
+    <div>
+    <strong>{{ c.author }}</strong> • {{ c.created_at|date:"M d, Y H:i" }}
+    <p>{{ c.content|linebreaks }}</p>
+    {% if user == c.author %}
+        <a href="{% url 'edit-comment' c.pk %}">Edit</a>
+        <form method="post" action="{% url 'delete-comment' c.pk %}" style="display:inline;">
+        {% csrf_token %}<button type="submit">Delete</button>
+        </form>
+    {% endif %}
+    </div>
+    <hr>
+{% empty %}
+    <p>No comments yet.</p>
+{% endfor %}
+
+{% if user.is_authenticated %}
+    <h4>Add a comment</h4>
+    <form method="post" action="{% url 'add-comment' object.pk %}">
+    {% csrf_token %}
+    {{ comment_form.as_p }}
+    <button type="submit">Post</button>
+    </form>
+{% else %}
+    <p><a href="{% url 'login' %}">Login</a> to comment.</p>
+{% endif %}
+{% endblock %}
