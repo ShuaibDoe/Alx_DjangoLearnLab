@@ -80,3 +80,8 @@ class UnfollowUserView(generics.GenericAPIView):
         )
 
         return Response({'status': f"You have unfollowed {user_to_unfollow.email}"}, status=status.HTTP_200_OK)
+
+class CustomUserViewSet(viewsets.ModelViewSet):
+    queryset = CustomUser.objects.all()
+    serializer_class = FollowSerializer
+    permission_classes = [permissions.IsAuthenticated]
