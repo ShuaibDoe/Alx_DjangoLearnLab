@@ -54,3 +54,15 @@ class FeedView(generics.ListAPIView):
         user = self.request.user
         following_users = user.following.all()   
         return Post.objects.filter(author__in=following_users).order_by('-created_at')
+
+class UnlikePostView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        post = generics.get_object_or_404(Post, pk=pk)
+
+        like = Like.objects.filter(user=request.user, post=post).first()
+        if not like:
+            return Response({'error': 'you have not liked this post'}, status=status.HTTP_400_BAD_REQUEST)
+
+        like.delete()
