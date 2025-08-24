@@ -1,53 +1,82 @@
-from rest_framework import generics, permissions, status
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
-from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate
+from .serializers import RegisterSerializer, TokenSerializer, ProfileSerializer, FollowSerializer
+from django.contrib.auth import get_user_model
+from .models import CustomUser
+from notifications.models import Notification
 
-from .models import User
-from .serializers import (
-    RegisterSerializer,
-    LoginSerializer,
-    TokenSerializer,
-    UserSerializer,
-)
+# Create your views here.
+User = get_user_model()
+
 
 class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    permission_classes = [permissions.AllowAny]
     serializer_class = RegisterSerializer
 
     def create(self, request, *args, **kwargs):
-        resp = super().create(request, *args, **kwargs)
-        user = User.objects.get(username=resp.data["username"])
-        token = Token.objects.get(user=user)
-        return Response({"user": UserSerializer(user).data, "token": token.key}, status=status.HTTP_201_CREATED)
-
-class LoginView(APIView):
-    permission_classes = [permissions.AllowAny]
-    def post(self, request):
-        serializer = LoginSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data["user"]
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({"user": UserSerializer(user).data, "token": token.key})
+        user = serializer.save()
+        token = Token.objects.get(user=user)
+
+        return Response({
+            'user': serializer.data,
+            'token': token.key
+        }, status=status.HTTP_201_CREATED)
+
+
+class LoginView(generics.GenericAPIView):
+    serializer_class = TokenSerializer
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        user = authenticate(email=email, password=password)
+
+        if user:
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({'token': token.key})
+        return Response({'error': 'invalid Credentials'}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserSerializer
+    serializer_class = ProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
     def get_object(self):
         return self.request.user
 
-# Follow / Unfollow
-class FollowUserView(APIView):
-    def post(self, request, user_id):
-        target = get_object_or_404(User, pk=user_id)
-        if target == request.user:
-            return Response({"detail": "You cannot follow yourself."}, status=400)
-        request.user.following.add(target)
-        return Response({"detail": f"Now following {target.username}."})
 
-class UnfollowUserView(APIView):
+class FollowUserView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request, user_id):
-        target = get_object_or_404(User, pk=user_id)
-        request.user.following.remove(target)
-        return Response({"detail": f"Unfollowed {target.username}."})
+        user_to_follow = get_object_or_404(CustomUser, id=user_id)
+        request.user.follow(user_to_follow)
+
+        Notification.objects.create(
+            recipient=user_to_follow,
+            actor=request.user,
+            verb='followed',
+            target=user_to_follow
+        )
+        return Response({'status': f"You are now following {user_to_follow.email}"}, status=status.HTTP_200_OK)
+
+
+class UnfollowUserView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, user_id):
+        user_to_unfollow = get_object_or_404(CustomUser, id=user_id)
+        request.user.unfollow(user_to_unfollow)
+
+        Notification.objects.create(
+            recipient=user_to_unfollow,
+            actor=request.user,
+            verb='unfollowed',
+            target=user_to_unfollow
+        )
+
+        return Response({'status': f"You have unfollowed {user_to_unfollow.email}"}, status=status.HTTP_200_OK)
