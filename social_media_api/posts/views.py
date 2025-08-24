@@ -46,18 +46,11 @@ class CommentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
-class FeedView(APIView):
-    """
-    Returns posts from users the current user follows, newest first.
-    """
-    def get(self, request):
-        user = request.user
-        following_ids = user.following.values_list("id", flat=True)
-        qs = Post.objects.filter(author_id__in=following_ids).order_by("-created_at")
-        page = self.request.query_params.get("page")
-        # Use DRF paginator already configured
-        from rest_framework.pagination import PageNumberPagination
-        paginator = PageNumberPagination()
-        paginated = paginator.paginate_queryset(qs, request, view=self)
-        serializer = PostSerializer(paginated, many=True, context={"request": request})
-        return paginator.get_paginated_response(serializer.data)
+class FeedView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        following_users = user.following.all()   
+        return Post.objects.filter(author__in=following_users).order_by('-created_at')
